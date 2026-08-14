@@ -1,45 +1,90 @@
-name: Build Debian 13 ARM64 RootFS for PRoot
+name: Build Minimal Debian 13 ARM64 RootFS Tarballs (.tar.gz)
 
 on:
   push:
   workflow_dispatch:
 
 jobs:
-  build-tarball:
+  build-variant:
     runs-on: ubuntu-24.04-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "1-vanilla"
+            filename: "debian-13-slim-vanilla.tar.gz"
+            install_script: |
+              echo "No additional packages installed."
+
+          - name: "2-pio"
+            filename: "debian-13-slim-pio.tar.gz"
+            install_script: |
+              apt-get update
+              apt-get install -y --no-install-recommends python3 python3-pip python3-venv git curl ca-certificates unzip
+              python3 -m pip install --break-system-packages platformio
+
+          - name: "3-pio-arduino"
+            filename: "debian-13-slim-pio-arduino.tar.gz"
+            install_script: |
+              apt-get update
+              apt-get install -y --no-install-recommends python3 python3-pip python3-venv git curl ca-certificates unzip
+              python3 -m pip install --break-system-packages platformio
+              # Install Arduino AVR platform & Arduino CLI
+              pio platform install atmelavr
+              curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=/usr/local/bin sh
+
+          - name: "4-pio-esp32"
+            filename: "debian-13-slim-pio-esp32.tar.gz"
+            install_script: |
+              apt-get update
+              apt-get install -y --no-install-recommends python3 python3-pip python3-venv git curl ca-certificates unzip
+              python3 -m pip install --break-system-packages platformio
+              # Install ESP32 platform
+              pio platform install espressif32
+
+          - name: "5-pio-arduino-esp32"
+            filename: "debian-13-slim-pio-arduino-esp32.tar.gz"
+            install_script: |
+              apt-get update
+              apt-get install -y --no-install-recommends python3 python3-pip python3-venv git curl ca-certificates unzip
+              python3 -m pip install --break-system-packages platformio
+              # Install both AVR (Arduino) and ESP32 platforms & Arduino CLI
+              pio platform install atmelavr espressif32
+              curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=/usr/local/bin sh
 
     steps:
-      - name: Export Debian 13-slim RootFS from Docker
+      - name: Build Container and Install Packages
         run: |
-          echo "--> Creating container from debian:13-slim..."
-          docker create --name debian_export debian:13-slim
+          echo "--> Starting base container for variant: ${{ matrix.name }}"
+          docker run --name builder debian:13-slim bash -c "
+            set -e
+            ${{ matrix.install_script }}
+            # Clean apt caches, temp files, and remove .dockerenv
+            apt-get clean
+            rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+            rm -f /.dockerenv
+          "
 
-          echo "--> Exporting root filesystem to tarball..."
-          docker export debian_export -o debian-13-slim-rootfs.tar
+      - name: Export RootFS to .tar.gz
+        run: |
+          echo "--> Exporting rootfs and compressing to ${{ matrix.filename }}..."
+          docker export builder | gzip -9 > ${{ matrix.filename }}
 
           echo "--> Cleaning up container..."
-          docker rm debian_export
+          docker rm builder
 
-      - name: Inspect Tarball Contents
+      - name: Inspect Tarball Contents & Size
         run: |
-          echo "=== Top-level directory structure ==="
-          tar -tf debian-13-slim-rootfs.tar | cut -d/ -f1 | sort -u
+          echo "=== File Size ==="
+          ls -lh ${{ matrix.filename }}
 
           echo ""
-          echo "=== First 20 files in rootfs ==="
-          tar -tvf debian-13-slim-rootfs.tar | head -n 20
+          echo "=== Top-level directory structure ==="
+          tar -ztf ${{ matrix.filename }} | cut -d/ -f1 | sort -u
 
-      - name: Compress Tarball
-        run: |
-          echo "--> Compressing tarball with xz..."
-          xz -z -9 -e -T0 debian-13-slim-rootfs.tar
-
-          echo "--> Output details:"
-          ls -lh debian-13-slim-rootfs.tar.xz
-
-      - name: Upload RootFS Artifact
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: debian-13-slim-arm64-rootfs
-          path: debian-13-slim-rootfs.tar.xz
+          name: ${{ matrix.name }}
+          path: ${{ matrix.filename }}
           retention-days: 7
