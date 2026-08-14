@@ -45,9 +45,10 @@ jobs:
               apt-get install -y --no-install-recommends python3 python3-pip python3-venv ca-certificates unzip git
               python3 -m pip install --break-system-packages platformio
 
-              # Initialize project and build to pull platform, framework, and toolchain
-              pio project init --project-dir /tmp/pio -b uno
-              cd /tmp/pio && pio run
+              # Make directory, init project, build to fetch toolchain/framework
+              mkdir -p /tmp/pio && cd /tmp/pio
+              pio project init -b uno
+              pio run
               cd / && rm -rf /tmp/pio
 
           - name: "4-pio-esp32"
@@ -57,9 +58,10 @@ jobs:
               apt-get install -y --no-install-recommends python3 python3-pip python3-venv ca-certificates unzip git
               python3 -m pip install --break-system-packages platformio
 
-              # Initialize project and build for ESP32-CAM
-              pio project init --project-dir /tmp/pio -b esp32cam
-              cd /tmp/pio && pio run
+              # Make directory, init project, build to fetch toolchain/framework
+              mkdir -p /tmp/pio && cd /tmp/pio
+              pio project init -b esp32cam
+              pio run
               cd / && rm -rf /tmp/pio
 
           - name: "5-pio-arduino-esp32"
@@ -69,9 +71,10 @@ jobs:
               apt-get install -y --no-install-recommends python3 python3-pip python3-venv ca-certificates unzip git
               python3 -m pip install --break-system-packages platformio
 
-              # Multi-environment project for Atmel AVR Uno + ESP32-CAM
-              pio project init --project-dir /tmp/pio -b uno -b esp32cam
-              cd /tmp/pio && pio run
+              # Make directory, init project, build for both targets
+              mkdir -p /tmp/pio && cd /tmp/pio
+              pio project init -b uno -b esp32cam
+              pio run
               cd / && rm -rf /tmp/pio
 
     steps:
