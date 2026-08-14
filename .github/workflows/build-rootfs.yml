@@ -44,8 +44,10 @@ jobs:
               apt-get update
               apt-get install -y --no-install-recommends python3 python3-pip python3-venv ca-certificates unzip git
               python3 -m pip install --break-system-packages platformio
-              pio platform install atmelavr
-              pio pkg install -g -p "platformio/framework-atmelavr"
+              
+              # Install Atmel AVR platform & Arduino framework
+              pio pkg install -g -p "atmelavr"
+              pio pkg install -g -p "framework-arduino-avr"
 
           - name: "4-pio-esp32"
             variant_suffix: "pio-esp32.tar.gz"
@@ -53,8 +55,10 @@ jobs:
               apt-get update
               apt-get install -y --no-install-recommends python3 python3-pip python3-venv ca-certificates unzip git
               python3 -m pip install --break-system-packages platformio
-              pio platform install espressif32
-              pio pkg install -g -p "platformio/framework-arduinoespressif32"
+              
+              # Install ESP32 platform & Arduino framework
+              pio pkg install -g -p "espressif32"
+              pio pkg install -g -p "framework-arduinoespressif32"
 
           - name: "5-pio-arduino-esp32"
             variant_suffix: "pio-arduino-esp32.tar.gz"
@@ -62,10 +66,14 @@ jobs:
               apt-get update
               apt-get install -y --no-install-recommends python3 python3-pip python3-venv ca-certificates unzip git
               python3 -m pip install --break-system-packages platformio
-              pio platform install atmelavr
-              pio pkg install -g -p "platformio/framework-atmelavr"
-              pio platform install espressif32
-              pio pkg install -g -p "platformio/framework-arduinoespressif32"
+              
+              # Install Atmel AVR platform & Arduino framework
+              pio pkg install -g -p "atmelavr"
+              pio pkg install -g -p "framework-arduino-avr"
+              
+              # Install ESP32 platform & Arduino framework
+              pio pkg install -g -p "espressif32"
+              pio pkg install -g -p "framework-arduinoespressif32"
 
     steps:
       - name: Compute Dynamic Filename
