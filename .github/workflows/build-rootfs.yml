@@ -44,9 +44,11 @@ jobs:
               apt-get update
               apt-get install -y --no-install-recommends python3 python3-pip python3-venv ca-certificates unzip git
               python3 -m pip install --break-system-packages platformio
-              
-              # -p installs platform, -t installs tool/framework
-              pio pkg install -g -p "atmelavr" -t "framework-arduino-avr"
+
+              # Initialize project and build to pull platform, framework, and toolchain
+              pio project init --project-dir /tmp/pio -b uno
+              cd /tmp/pio && pio run
+              cd / && rm -rf /tmp/pio
 
           - name: "4-pio-esp32"
             variant_suffix: "pio-esp32.tar.gz"
@@ -54,9 +56,11 @@ jobs:
               apt-get update
               apt-get install -y --no-install-recommends python3 python3-pip python3-venv ca-certificates unzip git
               python3 -m pip install --break-system-packages platformio
-              
-              # -p installs platform, -t installs tool/framework
-              pio pkg install -g -p "espressif32" -t "framework-arduinoespressif32"
+
+              # Initialize project and build for ESP32-CAM
+              pio project init --project-dir /tmp/pio -b esp32cam
+              cd /tmp/pio && pio run
+              cd / && rm -rf /tmp/pio
 
           - name: "5-pio-arduino-esp32"
             variant_suffix: "pio-arduino-esp32.tar.gz"
@@ -64,10 +68,11 @@ jobs:
               apt-get update
               apt-get install -y --no-install-recommends python3 python3-pip python3-venv ca-certificates unzip git
               python3 -m pip install --break-system-packages platformio
-              
-              # Install platforms (-p) and frameworks (-t) together
-              pio pkg install -g -p "atmelavr" -t "framework-arduino-avr"
-              pio pkg install -g -p "espressif32" -t "framework-arduinoespressif32"
+
+              # Multi-environment project for Atmel AVR Uno + ESP32-CAM
+              pio project init --project-dir /tmp/pio -b uno -b esp32cam
+              cd /tmp/pio && pio run
+              cd / && rm -rf /tmp/pio
 
     steps:
       - name: Compute Dynamic Filename
