@@ -1,39 +1,45 @@
-name: ARM64 PRoot-Distro
+name: Build Debian 13 ARM64 RootFS for PRoot
 
 on:
   push:
   workflow_dispatch:
 
 jobs:
-  proot:
+  build-tarball:
     runs-on: ubuntu-24.04-arm
 
     steps:
-      - name: Install PRoot and Python
+      - name: Export Debian 13-slim RootFS from Docker
         run: |
-          sudo apt update
-          sudo apt install -y proot python3 python3-pip
+          echo "--> Creating container from debian:13-slim..."
+          docker create --name debian_export debian:13-slim
 
-      - name: Install PRoot-Distro
-        run: |
-          python3 -m pip install --user proot-distro --break-system-packages
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "--> Exporting root filesystem to tarball..."
+          docker export debian_export -o debian-13-slim-rootfs.tar
 
-      - name: Check architecture
-        run: |
-          uname -m
-          uname -a
-          proot --version
-          proot-distro --help
+          echo "--> Cleaning up container..."
+          docker rm debian_export
 
-      - name: Install Debian
+      - name: Inspect Tarball Contents
         run: |
-          proot-distro install debian:13.6-slim
+          echo "=== Top-level directory structure ==="
+          tar -tf debian-13-slim-rootfs.tar | cut -d/ -f1 | sort -u
 
-      - name: Enter Debian
-        env:
-          PROOT_NO_SECCOMP: "1"
+          echo ""
+          echo "=== First 20 files in rootfs ==="
+          tar -tvf debian-13-slim-rootfs.tar | head -n 20
+
+      - name: Compress Tarball
         run: |
-          unset LD_PRELOAD
-          proot-distro login debian
-          
+          echo "--> Compressing tarball with xz..."
+          xz -z -9 -e -T0 debian-13-slim-rootfs.tar
+
+          echo "--> Output details:"
+          ls -lh debian-13-slim-rootfs.tar.xz
+
+      - name: Upload RootFS Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: debian-13-slim-arm64-rootfs
+          path: debian-13-slim-rootfs.tar.xz
+          retention-days: 7
