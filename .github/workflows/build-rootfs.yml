@@ -45,9 +45,10 @@ jobs:
               apt-get install -y --no-install-recommends python3 python3-pip python3-venv ca-certificates unzip git
               python3 -m pip install --break-system-packages platformio
 
-              # Make directory, init project, build to fetch toolchain/framework
+              # Make directory, init project, create dummy main.cpp, and compile
               mkdir -p /tmp/pio && cd /tmp/pio
               pio project init -b uno
+              printf '#include <Arduino.h>\nvoid setup(){}\nvoid loop(){}\n' > src/main.cpp
               pio run
               cd / && rm -rf /tmp/pio
 
@@ -58,9 +59,10 @@ jobs:
               apt-get install -y --no-install-recommends python3 python3-pip python3-venv ca-certificates unzip git
               python3 -m pip install --break-system-packages platformio
 
-              # Make directory, init project, build to fetch toolchain/framework
+              # Make directory, init project, create dummy main.cpp, and compile
               mkdir -p /tmp/pio && cd /tmp/pio
               pio project init -b esp32cam
+              printf '#include <Arduino.h>\nvoid setup(){}\nvoid loop(){}\n' > src/main.cpp
               pio run
               cd / && rm -rf /tmp/pio
 
@@ -71,9 +73,10 @@ jobs:
               apt-get install -y --no-install-recommends python3 python3-pip python3-venv ca-certificates unzip git
               python3 -m pip install --break-system-packages platformio
 
-              # Make directory, init project, build for both targets
+              # Make directory, init project, create dummy main.cpp, and compile
               mkdir -p /tmp/pio && cd /tmp/pio
               pio project init -b uno -b esp32cam
+              printf '#include <Arduino.h>\nvoid setup(){}\nvoid loop(){}\n' > src/main.cpp
               pio run
               cd / && rm -rf /tmp/pio
 
