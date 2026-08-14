@@ -18,18 +18,13 @@ jobs:
           python3 -m pip install --user proot-distro --break-system-packages
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: Check architecture
-        run: |
-          uname -m
-          uname -a
-          proot --version
-          proot-distro --help
-
       - name: Install Debian
         run: |
           proot-distro install debian:13.6-slim
 
       - name: Enter Debian
+        env:
+          PROOT_NO_SECCOMP: "1"
         run: |
           proot-distro login debian -- /bin/bash -c '
             echo "Architecture:"
