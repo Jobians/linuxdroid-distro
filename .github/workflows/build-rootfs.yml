@@ -45,6 +45,7 @@ jobs:
               apt-get install -y --no-install-recommends python3 python3-pip python3-venv ca-certificates unzip git
               python3 -m pip install --break-system-packages platformio
               pio platform install atmelavr
+              pio pkg install -g -p "platformio/framework-atmelavr"
 
           - name: "4-pio-esp32"
             variant_suffix: "pio-esp32.tar.gz"
@@ -53,6 +54,7 @@ jobs:
               apt-get install -y --no-install-recommends python3 python3-pip python3-venv ca-certificates unzip git
               python3 -m pip install --break-system-packages platformio
               pio platform install espressif32
+              pio pkg install -g -p "platformio/framework-arduinoespressif32"
 
           - name: "5-pio-arduino-esp32"
             variant_suffix: "pio-arduino-esp32.tar.gz"
@@ -60,7 +62,10 @@ jobs:
               apt-get update
               apt-get install -y --no-install-recommends python3 python3-pip python3-venv ca-certificates unzip git
               python3 -m pip install --break-system-packages platformio
-              pio platform install atmelavr espressif32
+              pio platform install atmelavr
+              pio pkg install -g -p "platformio/framework-atmelavr"
+              pio platform install espressif32
+              pio pkg install -g -p "platformio/framework-arduinoespressif32"
 
     steps:
       - name: Compute Dynamic Filename
@@ -116,7 +121,6 @@ jobs:
       - name: Compute Valid Tag Name
         id: tag
         run: |
-          # Converts 'debian:13-slim' -> 'debian-13-slim' (strips invalid git tag characters)
           TAG_SLUG=$(echo "${{ env.BASE_IMAGE }}" | tr '/:' '-')
           echo "slug=${TAG_SLUG}" >> "$GITHUB_OUTPUT"
 
