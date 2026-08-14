@@ -2,6 +2,9 @@ name: Build Minimal Debian 13 ARM64 RootFS Tarballs (.tar.gz)
 
 on:
   push:
+    branches:
+      - main
+      - master
   workflow_dispatch:
 
 jobs:
@@ -20,37 +23,32 @@ jobs:
             filename: "debian-13-slim-pio.tar.gz"
             install_script: |
               apt-get update
-              apt-get install -y --no-install-recommends python3 python3-pip python3-venv git curl ca-certificates unzip
+              apt-get install -y --no-install-recommends python3 python3-pip python3-venv ca-certificates unzip git
               python3 -m pip install --break-system-packages platformio
 
           - name: "3-pio-arduino"
             filename: "debian-13-slim-pio-arduino.tar.gz"
             install_script: |
               apt-get update
-              apt-get install -y --no-install-recommends python3 python3-pip python3-venv git curl ca-certificates unzip
+              apt-get install -y --no-install-recommends python3 python3-pip python3-venv ca-certificates unzip git
               python3 -m pip install --break-system-packages platformio
-              # Install Arduino AVR platform & Arduino CLI
               pio platform install atmelavr
-              curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=/usr/local/bin sh
 
           - name: "4-pio-esp32"
             filename: "debian-13-slim-pio-esp32.tar.gz"
             install_script: |
               apt-get update
-              apt-get install -y --no-install-recommends python3 python3-pip python3-venv git curl ca-certificates unzip
+              apt-get install -y --no-install-recommends python3 python3-pip python3-venv ca-certificates unzip git
               python3 -m pip install --break-system-packages platformio
-              # Install ESP32 platform
               pio platform install espressif32
 
           - name: "5-pio-arduino-esp32"
             filename: "debian-13-slim-pio-arduino-esp32.tar.gz"
             install_script: |
               apt-get update
-              apt-get install -y --no-install-recommends python3 python3-pip python3-venv git curl ca-certificates unzip
+              apt-get install -y --no-install-recommends python3 python3-pip python3-venv ca-certificates unzip git
               python3 -m pip install --break-system-packages platformio
-              # Install both AVR (Arduino) and ESP32 platforms & Arduino CLI
               pio platform install atmelavr espressif32
-              curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=/usr/local/bin sh
 
     steps:
       - name: Build Container and Install Packages
@@ -59,9 +57,12 @@ jobs:
           docker run --name builder debian:13-slim bash -c "
             set -e
             ${{ matrix.install_script }}
-            # Clean apt caches, temp files, and remove .dockerenv
+
+            echo '--> Cleaning caches and temporary files...'
+            rm -rf /root/.cache
+            rm -rf /root/.platformio/.cache
             apt-get clean
-            rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+            rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /var/cache/apt/*
             rm -f /.dockerenv
           "
 
@@ -73,14 +74,10 @@ jobs:
           echo "--> Cleaning up container..."
           docker rm builder
 
-      - name: Inspect Tarball Contents & Size
+      - name: Inspect Final Size
         run: |
-          echo "=== File Size ==="
+          echo "=== Final Compressed Size ==="
           ls -lh ${{ matrix.filename }}
-
-          echo ""
-          echo "=== Top-level directory structure ==="
-          tar -ztf ${{ matrix.filename }} | cut -d/ -f1 | sort -u
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
