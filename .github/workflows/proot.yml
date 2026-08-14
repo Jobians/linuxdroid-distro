@@ -1,0 +1,41 @@
+name: ARM64 PRoot-Distro
+
+on:
+  workflow_dispatch:
+
+jobs:
+  proot:
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - name: Install PRoot and Python
+        run: |
+          sudo apt update
+          sudo apt install -y proot python3 python3-pip
+
+      - name: Install PRoot-Distro
+        run: |
+          python3 -m pip install --user proot-distro --break-system-packages
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Check architecture
+        run: |
+          uname -m
+          uname -a
+          proot --version
+          proot-distro --help
+
+      - name: Install Debian
+        run: |
+          proot-distro install debian:13.6-slim
+
+      - name: Enter Debian
+        run: |
+          proot-distro login debian -- /bin/bash -c '
+            echo "Architecture:"
+            uname -m
+            echo "Userspace:"
+            cat /etc/os-release
+            echo "User:"
+            id
+          '
