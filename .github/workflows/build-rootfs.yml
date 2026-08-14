@@ -1,0 +1,122 @@
+name: Build Minimal ARM64 RootFS Tarballs (.tar.gz)
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+    inputs:
+      base_image:
+        description: 'Docker Base Image (e.g., debian:13-slim, ubuntu:24.04, ubuntu:22.04)'
+        required: false
+        default: 'debian:13-slim'
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  BASE_IMAGE: ${{ inputs.base_image || 'debian:13-slim' }}
+
+jobs:
+  build-variant:
+    runs-on: ubuntu-24.04-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "1-vanilla"
+            variant_suffix: "vanilla.tar.gz"
+            install_script: |
+              echo "No additional packages installed."
+
+          - name: "2-pio"
+            variant_suffix: "pio.tar.gz"
+            install_script: |
+              apt-get update
+              apt-get install -y --no-install-recommends python3 python3-pip python3-venv ca-certificates unzip git
+              python3 -m pip install --break-system-packages platformio
+
+          - name: "3-pio-arduino"
+            variant_suffix: "pio-arduino.tar.gz"
+            install_script: |
+              apt-get update
+              apt-get install -y --no-install-recommends python3 python3-pip python3-venv ca-certificates unzip git
+              python3 -m pip install --break-system-packages platformio
+              pio platform install atmelavr
+
+          - name: "4-pio-esp32"
+            variant_suffix: "pio-esp32.tar.gz"
+            install_script: |
+              apt-get update
+              apt-get install -y --no-install-recommends python3 python3-pip python3-venv ca-certificates unzip git
+              python3 -m pip install --break-system-packages platformio
+              pio platform install espressif32
+
+          - name: "5-pio-arduino-esp32"
+            variant_suffix: "pio-arduino-esp32.tar.gz"
+            install_script: |
+              apt-get update
+              apt-get install -y --no-install-recommends python3 python3-pip python3-venv ca-certificates unzip git
+              python3 -m pip install --break-system-packages platformio
+              pio platform install atmelavr espressif32
+
+    steps:
+      - name: Compute Dynamic Filename
+        id: filename
+        run: |
+          IMAGE_SLUG=$(echo "${{ env.BASE_IMAGE }}" | tr '/:' '-')
+          echo "name=${IMAGE_SLUG}-${{ matrix.variant_suffix }}" >> "$GITHUB_OUTPUT"
+
+      - name: Build Container and Install Packages
+        run: |
+          echo "--> Starting base container using image: ${{ env.BASE_IMAGE }}"
+          docker run --name builder ${{ env.BASE_IMAGE }} bash -c "
+            set -e
+            export DEBIAN_FRONTEND=noninteractive
+            ${{ matrix.install_script }}
+
+            echo '--> Cleaning caches and temporary files...'
+            rm -rf /root/.cache /root/.platformio/.cache
+            apt-get clean
+            rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /var/cache/apt/*
+            rm -f /.dockerenv
+          "
+
+      - name: Export RootFS to .tar.gz
+        run: |
+          echo "--> Exporting rootfs and compressing to ${{ steps.filename.outputs.name }}..."
+          docker export builder | gzip -9 > ${{ steps.filename.outputs.name }}
+
+          echo "--> Cleaning up container..."
+          docker rm builder
+
+      - name: Inspect Final Size
+        run: |
+          echo "=== Final Compressed Size ==="
+          ls -lh ${{ steps.filename.outputs.name }}
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: ${{ steps.filename.outputs.name }}
+          retention-days: 1
+
+  publish-release:
+    needs: build-variant
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.BASE_IMAGE }}
+          name: "RootFS Tarballs (${{ env.BASE_IMAGE }})"
+          files: artifacts/*/*.tar.gz
+          generate_release_notes: true
