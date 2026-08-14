@@ -143,4 +143,3 @@ jobs:
           tag_name: ${{ steps.tag.outputs.slug }}
           name: "RootFS Tarballs (${{ env.BASE_IMAGE }})"
           files: artifacts/*/*.tar.gz
-          generate_release_notes: true
