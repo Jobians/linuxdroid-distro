@@ -35,5 +35,5 @@ jobs:
           PROOT_NO_SECCOMP: "1"
         run: |
           unset LD_PRELOAD
-          proot-distro login debian --no-sysvipc
+          proot-distro login debian
           
