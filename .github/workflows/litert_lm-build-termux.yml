@@ -1,4 +1,4 @@
-name: Build LiteRT-LM (Termux-compatible, aarch64 bionic)
+name: Build LiteRT-LM (Termux-compatible, aarch64 bionic, GPU)
 
 on:
   workflow_dispatch:
@@ -43,33 +43,28 @@ jobs:
       - name: Build
         env:
           ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
-        run: bazel build --config=android_arm64 //runtime/engine:litert_lm_main
+        run: bazel build --config=android_arm64 --define=litert_runtime_link_mode=dynamic //runtime/engine:litert_lm_main
 
-      - name: Compress
-        id: pack
+      - name: Prepare files
         run: |
-          mkdir out
-          cp bazel-bin/runtime/engine/litert_lm_main out/
-          file out/litert_lm_main
-          ${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip out/litert_lm_main || true
-          NAME=litert_lm_main-${{ inputs.ref }}-android-arm64
-          tar -czf $NAME.tar.gz -C out litert_lm_main
-          sha256sum $NAME.tar.gz > SHA256SUMS.txt
-          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          mkdir work out
+          cp bazel-bin/runtime/engine/litert_lm_main work/litert_lm_main
+          ${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip work/litert_lm_main || true
+          file work/litert_lm_main
+          tar -czf out/litert_lm_main-${{ inputs.ref }}-android-arm64.tar.gz -C work litert_lm_main
+          cp prebuilt/android_arm64/*.so out/
+          (cd out && sha256sum * > SHA256SUMS.txt)
+          ls -lh out/
 
       - uses: actions/upload-artifact@v4
         with:
           name: litert_lm_main_termux
-          path: |
-            ${{ steps.pack.outputs.name }}.tar.gz
-            SHA256SUMS.txt
+          path: out/
 
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.pack.outputs.name }}
-          name: ${{ steps.pack.outputs.name }}
-          body: "CPU-only litert_lm_main, source ${{ inputs.ref }}, built with NDK r28b for Termux (aarch64, bionic)."
-          files: |
-            ${{ steps.pack.outputs.name }}.tar.gz
-            SHA256SUMS.txt
+          tag_name: ${{ inputs.ref }}
+          name: LiteRT-LM ${{ inputs.ref }} (Termux, android arm64)
+          body: "litert_lm_main ${{ inputs.ref }} for Termux (aarch64, bionic), built with NDK r28b. Extract the tar.gz, put the binary in the same folder as the .so files (keep the .so names unchanged), and run with LD_LIBRARY_PATH set to that folder."
+          files: out/*
