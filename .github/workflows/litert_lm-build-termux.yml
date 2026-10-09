@@ -4,8 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "Tag or branch to build"
+        description: "Release tag to build (e.g. v0.16.0)"
         default: "v0.16.0"
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -17,6 +20,12 @@ jobs:
           repository: google-ai-edge/LiteRT-LM
           ref: ${{ inputs.ref }}
           lfs: true
+
+      - name: Verify ref is a tag
+        run: |
+          git fetch --tags --force
+          git rev-parse -q --verify "refs/tags/${{ inputs.ref }}" > /dev/null \
+            || { echo "ERROR: '${{ inputs.ref }}' is not a release tag (e.g. v0.16.0)"; exit 1; }
 
       - name: Setup Android NDK r28b
         id: ndk
@@ -36,13 +45,31 @@ jobs:
           ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
         run: bazel build --config=android_arm64 //runtime/engine:litert_lm_main
 
-      - name: Collect
+      - name: Compress
+        id: pack
         run: |
           mkdir out
           cp bazel-bin/runtime/engine/litert_lm_main out/
           file out/litert_lm_main
+          ${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip out/litert_lm_main || true
+          NAME=litert_lm_main-${{ inputs.ref }}-android-arm64
+          tar -czf $NAME.tar.gz -C out litert_lm_main
+          sha256sum $NAME.tar.gz > SHA256SUMS.txt
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v4
         with:
           name: litert_lm_main_termux
-          path: out/
+          path: |
+            ${{ steps.pack.outputs.name }}.tar.gz
+            SHA256SUMS.txt
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.pack.outputs.name }}
+          name: ${{ steps.pack.outputs.name }}
+          body: "CPU-only litert_lm_main, source ${{ inputs.ref }}, built with NDK r28b for Termux (aarch64, bionic)."
+          files: |
+            ${{ steps.pack.outputs.name }}.tar.gz
+            SHA256SUMS.txt
