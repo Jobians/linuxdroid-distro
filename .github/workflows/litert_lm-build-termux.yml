@@ -1,0 +1,48 @@
+name: Build LiteRT-LM (Termux-compatible, aarch64 bionic)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag or branch to build"
+        default: "v0.16.0"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: google-ai-edge/LiteRT-LM
+          ref: ${{ inputs.ref }}
+          lfs: true
+
+      - name: Setup Android NDK r28b
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r28b
+          link-to-sdk: false
+
+      - uses: bazel-contrib/setup-bazel@0.14.0
+        with:
+          bazelisk-cache: true
+          disk-cache: true
+          repository-cache: true
+
+      - name: Build
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: bazel build --config=android_arm64 //runtime/engine:litert_lm_main
+
+      - name: Collect
+        run: |
+          mkdir out
+          cp bazel-bin/runtime/engine/litert_lm_main out/
+          file out/litert_lm_main
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: litert_lm_main_termux
+          path: out/
