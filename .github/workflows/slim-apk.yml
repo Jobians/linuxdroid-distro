@@ -26,19 +26,27 @@ jobs:
           URL: ${{ inputs.url }}
           REF: ${{ inputs.referer }}
         run: |
-          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-          if [ -z "$REF" ]; then
-            case "$URL" in
-              *apkmirror.com*) REF="https://www.apkmirror.com/" ;;
-              *apkpure.*|*winudf.com*) REF="https://apkpure.com/" ;;
-              *) REF="$(echo "$URL" | cut -d/ -f1-3)/" ;;
-            esac
-          fi
-          curl -L --fail --retry 3 \
-            -A "$UA" -e "$REF" \
-            -H "Accept: */*" \
-            -H "Accept-Language: en-US,en;q=0.9" \
-            -o input.zip "$URL"
+          UA="Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/130.0.0.0 Mobile Safari/537.36"
+
+          case "$URL" in
+            *apkmirror.com*)
+              DEFAULT_REF="https://www.apkmirror.com/" ;;
+            *apkpure.*|*winudf.com*)
+              DEFAULT_REF="https://apkpure.com/" ;;
+            *)
+              DEFAULT_REF="$(echo "$URL" | cut -d/ -f1-3)/" ;;
+          esac
+          REF="${REF:-$DEFAULT_REF}"
+
+          curl -fL --retry 3 \
+            -A "$UA" \
+            -e "$REF" \
+            -D headers.txt \
+            -o input.zip "$URL" || {
+              echo "---- response headers ----"
+              cat headers.txt
+              exit 1
+            }
 
       - name: Remove unneeded splits
         env:
