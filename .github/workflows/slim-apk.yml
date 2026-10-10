@@ -21,32 +21,66 @@ jobs:
   slim:
     runs-on: ubuntu-latest
     steps:
-      - name: Download
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install patchright
+        run: |
+          pip install patchright
+          patchright install chrome
+          sudo apt-get update && sudo apt-get install -y xvfb
+
+      - name: Download with patchright
         env:
           URL: ${{ inputs.url }}
           REF: ${{ inputs.referer }}
         run: |
-          UA="Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/130.0.0.0 Mobile Safari/537.36"
-
           case "$URL" in
-            *apkmirror.com*)
-              DEFAULT_REF="https://www.apkmirror.com/" ;;
-            *apkpure.*|*winudf.com*)
-              DEFAULT_REF="https://apkpure.com/" ;;
-            *)
-              DEFAULT_REF="$(echo "$URL" | cut -d/ -f1-3)/" ;;
+            *apkmirror.com*) DEFAULT_REF="https://www.apkmirror.com/" ;;
+            *apkpure.*|*winudf.com*) DEFAULT_REF="https://apkpure.com/" ;;
+            *) DEFAULT_REF="$(echo "$URL" | cut -d/ -f1-3)/" ;;
           esac
-          REF="${REF:-$DEFAULT_REF}"
+          export REF="${REF:-$DEFAULT_REF}"
 
-          curl -fL --retry 3 \
-            -A "$UA" \
-            -e "$REF" \
-            -D headers.txt \
-            -o input.zip "$URL" || {
-              echo "---- response headers ----"
-              cat headers.txt
-              exit 1
-            }
+          cat > dl.py <<'EOF'
+          import os, sys
+          from patchright.sync_api import sync_playwright
+
+          url, ref = os.environ["URL"], os.environ["REF"]
+          with sync_playwright() as p:
+              ctx = p.chromium.launch_persistent_context(
+                  user_data_dir="/tmp/profile",
+                  channel="chrome",
+                  headless=False,
+                  no_viewport=True,
+                  accept_downloads=True,
+              )
+              page = ctx.pages[0] if ctx.pages else ctx.new_page()
+
+              # visit the site first so the challenge can clear
+              page.goto(ref, wait_until="domcontentloaded")
+              page.wait_for_timeout(10000)
+              print("Landing page title:", page.title())
+
+              try:
+                  with page.expect_download(timeout=300000) as d:
+                      try:
+                          page.goto(url)
+                      except Exception:
+                          pass  # "Download is starting" is expected
+                  d.value.save_as("input.zip")
+                  print("Saved input.zip")
+              except Exception as e:
+                  print("Download failed:", e)
+                  print("Page title:", page.title())
+                  sys.exit(1)
+              finally:
+                  ctx.close()
+          EOF
+
+          xvfb-run -a python dl.py
+          ls -lh input.zip
 
       - name: Remove unneeded splits
         env:
@@ -69,7 +103,6 @@ jobs:
             [ $keep = 1 ] || rm "$f"
           done
 
-          # keep XAPK manifest in sync with remaining files
           if [ -f manifest.json ]; then
             tmp=$(mktemp)
             jq --argjson files "$(ls *.apk | jq -R . | jq -s .)" \
