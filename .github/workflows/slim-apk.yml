@@ -58,7 +58,6 @@ jobs:
               )
               page = ctx.pages[0] if ctx.pages else ctx.new_page()
 
-              # visit the site first so the challenge can clear
               page.goto(ref, wait_until="domcontentloaded")
               page.wait_for_timeout(10000)
               print("Landing page title:", page.title())
@@ -90,8 +89,14 @@ jobs:
         run: |
           mkdir x && unzip -q input.zip -d x
           cd x
+          if [ ! -f base.apk ] && [ ! -f manifest.json ] && [ ! -f info.json ]; then
+            echo "Plain APK, not a bundle. Nothing to strip, passing it through untouched."
+            cd ..
+            cp input.zip slim.apk
+            exit 0
+          fi
+
           if [ -f manifest.json ]; then EXT=xapk; else EXT=apkm; fi
-          echo "EXT=$EXT" >> "$GITHUB_ENV"
 
           for f in split_config.*.apk config.*.apk; do
             [ -e "$f" ] || continue
