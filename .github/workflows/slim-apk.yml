@@ -5,6 +5,9 @@ on:
       url:
         description: "Direct link to .apkm or .xapk"
         required: true
+      referer:
+        description: "Referer (optional, auto-detected from the link)"
+        required: false
       arch:
         description: "CPU split to keep"
         default: "arm64_v8a"
@@ -21,9 +24,22 @@ jobs:
       - name: Download
         env:
           URL: ${{ inputs.url }}
+          REF: ${{ inputs.referer }}
         run: |
-          curl -L --fail -A "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/124 Mobile Safari/537.36" \
+          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+          if [ -z "$REF" ]; then
+            case "$URL" in
+              *apkmirror.com*) REF="https://www.apkmirror.com/" ;;
+              *apkpure.*|*winudf.com*) REF="https://apkpure.com/" ;;
+              *) REF="$(echo "$URL" | cut -d/ -f1-3)/" ;;
+            esac
+          fi
+          curl -L --fail --retry 3 \
+            -A "$UA" -e "$REF" \
+            -H "Accept: */*" \
+            -H "Accept-Language: en-US,en;q=0.9" \
             -o input.zip "$URL"
+
       - name: Remove unneeded splits
         env:
           ARCH: ${{ inputs.arch }}
@@ -45,18 +61,19 @@ jobs:
             [ $keep = 1 ] || rm "$f"
           done
 
-          # keep XAPK manifest in sync with the remaining files
+          # keep XAPK manifest in sync with remaining files
           if [ -f manifest.json ]; then
-            jq 'if .split_apks then .split_apks |= map(select(.file as $f | $f | test("^$") | not)) else . end' manifest.json >/dev/null
             tmp=$(mktemp)
             jq --argjson files "$(ls *.apk | jq -R . | jq -s .)" \
-              '.split_apks |= map(select(.file as $f | $files | index($f)))' \
+              'if .split_apks then .split_apks |= map(select(.file as $f | $files | index($f))) else . end' \
               manifest.json > "$tmp" && mv "$tmp" manifest.json
           fi
 
           ls -lh
           zip -qr -9 "../slim.$EXT" .
+
       - run: ls -lh input.zip slim.*
+
       - uses: actions/upload-artifact@v4
         with:
           name: slim
