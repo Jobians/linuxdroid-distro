@@ -1,0 +1,64 @@
+name: Slim APKM / XAPK
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Direct link to .apkm or .xapk"
+        required: true
+      arch:
+        description: "CPU split to keep"
+        default: "arm64_v8a"
+      dpi:
+        description: "Density split to keep"
+        default: "xxhdpi"
+      langs:
+        description: "Languages to keep (comma separated)"
+        default: "en"
+jobs:
+  slim:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download
+        env:
+          URL: ${{ inputs.url }}
+        run: |
+          curl -L --fail -A "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/124 Mobile Safari/537.36" \
+            -o input.zip "$URL"
+      - name: Remove unneeded splits
+        env:
+          ARCH: ${{ inputs.arch }}
+          DPI: ${{ inputs.dpi }}
+          LANGS: ${{ inputs.langs }}
+        run: |
+          mkdir x && unzip -q input.zip -d x
+          cd x
+          if [ -f manifest.json ]; then EXT=xapk; else EXT=apkm; fi
+          echo "EXT=$EXT" >> "$GITHUB_ENV"
+
+          for f in split_config.*.apk config.*.apk; do
+            [ -e "$f" ] || continue
+            n=${f#split_config.}; n=${n#config.}; n=${n%.apk}
+            keep=0
+            [ "$n" = "$ARCH" ] && keep=1
+            [ "$n" = "$DPI" ] && keep=1
+            for l in ${LANGS//,/ }; do [ "$n" = "$l" ] && keep=1; done
+            [ $keep = 1 ] || rm "$f"
+          done
+
+          # keep XAPK manifest in sync with the remaining files
+          if [ -f manifest.json ]; then
+            jq 'if .split_apks then .split_apks |= map(select(.file as $f | $f | test("^$") | not)) else . end' manifest.json >/dev/null
+            tmp=$(mktemp)
+            jq --argjson files "$(ls *.apk | jq -R . | jq -s .)" \
+              '.split_apks |= map(select(.file as $f | $files | index($f)))' \
+              manifest.json > "$tmp" && mv "$tmp" manifest.json
+          fi
+
+          ls -lh
+          zip -qr -9 "../slim.$EXT" .
+      - run: ls -lh input.zip slim.*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: slim
+          path: slim.*
+          compression-level: 0
